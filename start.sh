@@ -1,0 +1,33 @@
+#!/bin/bash
+
+echo "==================================="
+echo "OPs - Surgical Documentation System"
+echo "==================================="
+echo ""
+echo "Starting Docker services..."
+echo ""
+
+docker-compose up -d
+
+echo ""
+echo "==================================="
+echo "Services starting..."
+echo "==================================="
+echo ""
+echo "Please wait 30-60 seconds for all services to initialize."
+echo ""
+echo "Access the application:"
+echo "  Frontend: http://localhost:3000"
+echo "  Backend:  http://localhost:5000"
+echo ""
+echo "Login credentials:"
+echo "  Username: sabry"
+echo "  Password: pass"
+echo ""
+echo "To view logs:"
+echo "  docker-compose logs -f"
+echo ""
+echo "To stop services:"
+echo "  docker-compose down"
+echo ""
+echo "==================================="

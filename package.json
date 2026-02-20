@@ -1,0 +1,17 @@
+{
+  "name": "ops",
+  "version": "1.0.0",
+  "description": "Self-hosted surgical operation documentation system",
+  "scripts": {
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "build": "cd frontend && npm run build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "keywords": ["medical", "surgery", "documentation", "ocr", "self-hosted"],
+  "author": "Dr. Mohamed Sabry",
+  "license": "SEE LICENSE FILE"
+}
