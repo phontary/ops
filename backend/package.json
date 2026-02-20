@@ -10,16 +10,11 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.47.10",
     "express": "^4.21.2",
     "cors": "^2.8.5",
     "multer": "^1.4.5-lts.1",
     "jsonwebtoken": "^9.0.2",
-    "dotenv": "^16.4.7",
-    "node-fetch": "^3.3.2"
-  },
-  "devDependencies": {
-    "prisma": "^5.22.0"
+    "dotenv": "^16.4.7"
   }
 }
