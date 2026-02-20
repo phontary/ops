@@ -1,39 +1,42 @@
-export async function processOCR(files) {
-  const results = {
-    datum: null,
-    patient_id: null,
-    diagnose: '',
-    op_anlage: null,
-    anasthesie_typ: '',
-    lagerung: null,
-    op_team: [],
-    op_verlauf: null,
-    pathologie_befund: null,
-    dauer_min: 0,
-    blutverlust_ml: null,
-    materials: [],
-    times: [],
-    stats_icd: [],
-    raw: {}
-  };
+import { createWorker } from 'tesseract.js';
 
-  const allText = [];
-  const combinedText = allText.join('\n');
+export async function performOCR(files) {
+  const worker = await createWorker('deu');
+  const results = [];
 
-  results.datum = extractDate(combinedText);
-  results.diagnose = extractDiagnose(combinedText);
-  results.anasthesie_typ = extractAnasthesieTyp(combinedText);
-  results.lagerung = extractLagerung(combinedText);
-  results.op_team = extractTeam(combinedText);
-  results.op_verlauf = extractOpVerlauf(combinedText);
-  results.pathologie_befund = extractPathologie(combinedText);
-  results.dauer_min = extractDuration(combinedText);
-  results.blutverlust_ml = extractBlutverlust(combinedText);
-  results.materials = extractMaterials(combinedText);
-  results.times = extractTimes(combinedText);
-  results.stats_icd = extractICDCodes(results.diagnose);
+  for (const file of files) {
+    try {
+      const { data: { text } } = await worker.recognize(file);
+      results.push(text);
+    } catch (error) {
+      console.error('OCR error:', error);
+      results.push('');
+    }
+  }
 
+  await worker.terminate();
   return results;
+}
+
+export function extractOperationData(textArray) {
+  const combinedText = textArray.join('\n');
+
+  return {
+    datum: extractDate(combinedText),
+    patient_id: null,
+    diagnose: extractDiagnose(combinedText),
+    op_anlage: null,
+    anasthesie_typ: extractAnasthesieTyp(combinedText),
+    lagerung: extractLagerung(combinedText),
+    op_team: extractTeam(combinedText),
+    op_verlauf: extractOpVerlauf(combinedText),
+    pathologie_befund: extractPathologie(combinedText),
+    dauer_min: extractDuration(combinedText),
+    blutverlust_ml: extractBlutverlust(combinedText),
+    materials: extractMaterials(combinedText),
+    times: extractTimes(combinedText),
+    stats_icd: []
+  };
 }
 
 function extractDate(text) {
@@ -41,9 +44,9 @@ function extractDate(text) {
   const match = text.match(datePattern);
   if (match) {
     const [, day, month, year] = match;
-    return new Date(`${year}-${month}-${day}`);
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
-  return new Date();
+  return new Date().toISOString().split('T')[0];
 }
 
 function extractDiagnose(text) {
@@ -181,10 +184,4 @@ function extractTimes(text) {
   }
 
   return times;
-}
-
-function extractICDCodes(diagnose) {
-  const icdPattern = /[A-Z]\d{2}\.?\d*/g;
-  const matches = diagnose.match(icdPattern);
-  return matches ? [...new Set(matches)] : [];
 }

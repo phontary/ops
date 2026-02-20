@@ -1,58 +1,22 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: ops-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ops_db
-    volumes:
-      - ./pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - ops-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  ocr:
-    image: paddlepaddle/paddleocr:latest
-    container_name: ops-ocr
-    ports:
-      - "8000:8000"
-    networks:
-      - ops-network
-    command: ["paddleocr", "--use_angle_cls", "true", "--use_gpu", "false"]
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ops-backend
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ops_db?schema=public
-      JWT_SECRET: ops-secret-key-change-in-production
-      PORT: 5000
-      OCR_SERVICE_URL: http://ocr:8000
+    env_file:
+      - .env
     volumes:
       - ./uploads:/app/uploads
       - ./backend:/app
       - /app/node_modules
     ports:
       - "5000:5000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      ocr:
-        condition: service_started
     networks:
       - ops-network
-    command: sh -c "npx prisma db push && npm start"
+    command: sh -c "npm start"
 
   frontend:
     build:
@@ -60,7 +24,9 @@ services:
       dockerfile: Dockerfile
     container_name: ops-frontend
     environment:
-      VITE_API_URL: http://backend:5000
+      VITE_API_URL: http://localhost:5000
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
     ports:
       - "3000:3000"
     depends_on:
@@ -71,6 +37,3 @@ services:
 networks:
   ops-network:
     driver: bridge
-
-volumes:
-  pgdata:

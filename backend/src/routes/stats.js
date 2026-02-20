@@ -1,25 +1,30 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { supabase } from '../db.js';
 import { authenticate } from '../middleware/auth.js';
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const operations = await prisma.operation.findMany();
+    const { data: operations, error } = await supabase
+      .from('operations')
+      .select('*');
+
+    if (error) throw error;
+
+    const ops = operations || [];
 
     const byYear = {};
     const byDiagnose = {};
     const byICD = {};
 
-    operations.forEach(op => {
+    ops.forEach(op => {
       const year = new Date(op.datum).getFullYear();
       byYear[year] = (byYear[year] || 0) + 1;
 
       byDiagnose[op.diagnose] = (byDiagnose[op.diagnose] || 0) + 1;
 
-      op.stats_icd.forEach(icd => {
+      (op.stats_icd || []).forEach(icd => {
         byICD[icd] = (byICD[icd] || 0) + 1;
       });
     });
@@ -40,9 +45,9 @@ router.get('/', authenticate, async (req, res) => {
     })).sort((a, b) => b.count - a.count);
 
     res.json({
-      total: operations.length,
-      avgDuration: operations.length > 0
-        ? Math.round(operations.reduce((sum, op) => sum + op.dauer_min, 0) / operations.length)
+      total: ops.length,
+      avgDuration: ops.length > 0
+        ? Math.round(ops.reduce((sum, op) => sum + op.dauer_min, 0) / ops.length)
         : 0,
       byYear: yearData,
       byDiagnose: diagnoseData,

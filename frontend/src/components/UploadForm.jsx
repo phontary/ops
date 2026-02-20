@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { performOCR, extractOperationData } from '../utils/ocr';
 
 export default function UploadForm({ onSuccess }) {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
+  const [ocrProgress, setOcrProgress] = useState('');
   const { token } = useAuth();
   const { t } = useLanguage();
 
@@ -19,13 +21,25 @@ export default function UploadForm({ onSuccess }) {
 
     setUploading(true);
     setMessage('');
-
-    const formData = new FormData();
-    files.forEach(file => {
-      formData.append('files', file);
-    });
+    setOcrProgress('Processing images with OCR...');
 
     try {
+      const ocrTexts = await performOCR(files);
+      const extractedData = extractOperationData(ocrTexts);
+
+      setOcrProgress('Uploading files...');
+
+      const formData = new FormData();
+      files.forEach(file => {
+        formData.append('files', file);
+      });
+
+      Object.entries(extractedData).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          formData.append(key, typeof value === 'object' ? JSON.stringify(value) : value);
+        }
+      });
+
       const response = await fetch('/api/ops/upload', {
         method: 'POST',
         headers: {
@@ -47,6 +61,7 @@ export default function UploadForm({ onSuccess }) {
       setMessage('Upload error: ' + error.message);
     } finally {
       setUploading(false);
+      setOcrProgress('');
     }
   };
 
@@ -75,7 +90,7 @@ export default function UploadForm({ onSuccess }) {
           disabled={uploading || files.length === 0}
           className="w-full bg-medical-blue text-white py-3 rounded-lg hover:bg-medical-dark transition disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          {uploading ? 'Uploading...' : t('uploadFiles')}
+          {uploading ? ocrProgress || 'Processing...' : t('uploadFiles')}
         </button>
 
         {message && (

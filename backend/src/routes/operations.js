@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { PrismaClient } from '@prisma/client';
+import { supabase } from '../db.js';
 import { authenticate } from '../middleware/auth.js';
 import { processOCR } from '../services/ocr.js';
 import { checkMandatoryFields, generateOpId, hashPatientId } from '../utils/helpers.js';
@@ -11,7 +11,6 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
 const uploadsDir = join(__dirname, '../../../uploads');
@@ -84,11 +83,33 @@ router.post('/upload', authenticate, upload.array('files', 10), async (req, res)
     const missingFields = checkMandatoryFields(operationData);
     operationData.complete = missingFields.length === 0;
 
-    const operation = await prisma.operation.upsert({
-      where: { op_id: opId },
-      update: operationData,
-      create: operationData
-    });
+    const { data: existingOp } = await supabase
+      .from('operations')
+      .select('*')
+      .eq('op_id', opId)
+      .maybeSingle();
+
+    let operation;
+    if (existingOp) {
+      const { data, error } = await supabase
+        .from('operations')
+        .update(operationData)
+        .eq('op_id', opId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      operation = data;
+    } else {
+      const { data, error } = await supabase
+        .from('operations')
+        .insert(operationData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      operation = data;
+    }
 
     res.json({
       success: true,
@@ -103,11 +124,14 @@ router.post('/upload', authenticate, upload.array('files', 10), async (req, res)
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const operations = await prisma.operation.findMany({
-      orderBy: { datum: 'desc' }
-    });
+    const { data: operations, error } = await supabase
+      .from('operations')
+      .select('*')
+      .order('datum', { ascending: false });
 
-    const opsWithMissing = operations.map(op => ({
+    if (error) throw error;
+
+    const opsWithMissing = (operations || []).map(op => ({
       ...op,
       missing_fields: checkMandatoryFields(op)
     }));
@@ -121,9 +145,13 @@ router.get('/', authenticate, async (req, res) => {
 
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const operation = await prisma.operation.findUnique({
-      where: { id: req.params.id }
-    });
+    const { data: operation, error } = await supabase
+      .from('operations')
+      .select('*')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (error) throw error;
 
     if (!operation) {
       return res.status(404).json({ error: 'Operation not found' });
@@ -147,16 +175,24 @@ router.patch('/:id', authenticate, async (req, res) => {
       updateData.patient_id = hashPatientId(updateData.patient_id);
     }
 
-    const operation = await prisma.operation.update({
-      where: { id },
-      data: updateData
-    });
+    const { data: operation, error } = await supabase
+      .from('operations')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     const missingFields = checkMandatoryFields(operation);
-    const finalOperation = await prisma.operation.update({
-      where: { id },
-      data: { complete: missingFields.length === 0 }
-    });
+    const { data: finalOperation, error: updateError } = await supabase
+      .from('operations')
+      .update({ complete: missingFields.length === 0 })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
 
     res.json({
       ...finalOperation,
@@ -169,9 +205,13 @@ router.patch('/:id', authenticate, async (req, res) => {
 
 router.delete('/:id', authenticate, async (req, res) => {
   try {
-    await prisma.operation.delete({
-      where: { id: req.params.id }
-    });
+    const { error } = await supabase
+      .from('operations')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -180,12 +220,15 @@ router.delete('/:id', authenticate, async (req, res) => {
 
 router.get('/export/csv', authenticate, async (req, res) => {
   try {
-    const operations = await prisma.operation.findMany({
-      orderBy: { datum: 'desc' }
-    });
+    const { data: operations, error } = await supabase
+      .from('operations')
+      .select('*')
+      .order('datum', { ascending: false });
+
+    if (error) throw error;
 
     const csvHeader = 'OP-ID,Datum,Diagnose,Anästhesie,Dauer (Min),Blutverlust (ml),Team,Pathologie,Vollständig\n';
-    const csvRows = operations.map(op => {
+    const csvRows = (operations || []).map(op => {
       const datum = new Date(op.datum).toLocaleDateString('de-DE');
       const team = op.op_team.join('; ');
       return `"${op.op_id}","${datum}","${op.diagnose}","${op.anasthesie_typ}",${op.dauer_min},${op.blutverlust_ml || ''},"${team}","${op.pathologie_befund || ''}",${op.complete ? 'Ja' : 'Nein'}`;
